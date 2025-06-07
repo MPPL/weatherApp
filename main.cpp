@@ -26,7 +26,7 @@ class Handler{
     public:
     
     bool debug = false;
-    char* url;
+    std::string url;
     CURL *curl_handle;
     CURLcode urlcode;
     simpledata data;
@@ -63,13 +63,23 @@ class Handler{
         return SIZE;
     }
 
-    simpledata request(){
+    simpledata request(std::vector<std::string> params, int paramsLen){
         curl_handle = curl_easy_init();
         if(!curl_handle){
             exit(-1);
         }
 
-        curl_easy_setopt(curl_handle, CURLOPT_URL, url);
+        url = "https://api.open-meteo.com/v1/forecast?";
+        for(int i = 0; i < paramsLen -1; i++){
+            url = std::format("{}{}&", url, params[i]);
+        }
+        if(paramsLen){
+            url = std::format("{}{}", url, params[paramsLen-1]);
+        }
+
+        std::cout << url << "\n";
+
+        curl_easy_setopt(curl_handle, CURLOPT_URL, url.c_str());
         curl_easy_setopt(curl_handle, CURLOPT_FOLLOWLOCATION, 1l);
         curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, MemoryHandler);
         curl_easy_setopt(curl_handle, CURLOPT_WRITEDATA, (void *)&data);
@@ -88,6 +98,10 @@ class Handler{
         curl_easy_cleanup(curl_handle);
         return data;
     }
+
+    inline std::string buildParam(std::string name, std::string value){
+        return std::format("{}={}", name, value);
+    }
 };
 
 void printData(json data){
@@ -96,12 +110,12 @@ void printData(json data){
     std::cout << "is_day: " << (bool)(int)(data["current"]["is_day"]) << "\n";
 }
 
-#define CMD_MODE
+//#define CMD_MODE
 void cmd(Handler* h, DBManager* db){
     int option = 0;
     bool loop = true;
     while(loop){
-        std::cout << "1. Log in\n2. Register\n3. Exit";
+        std::cout << "1. Log in\n2. Register\n3. Exit\n";
         std::cin >> option;
         switch(option){
             case 1:{
@@ -149,8 +163,24 @@ int main(int argc, char* argv[]){
 #endif
 
     //Hand.debug = true;
-    Hand.url = "https://api.open-meteo.com/v1/forecast?latitude=52.52&longitude=13.41&current=is_day,apparent_temperature,relative_humidity_2m,temperature_2m&forecast_days=1";
-    json data = json::parse(Hand.request().memory);
+    //Hand.url = "https://api.open-meteo.com/v1/forecast?latitude=52.52&longitude=13.41&current=is_day,apparent_temperature,relative_humidity_2m,temperature_2m&forecast_days=1";
+    std::string params[] = {
+        "latitude",
+        "longitude",
+        "current",
+        "forecast_days",
+    };
+    std::string values[] = {
+        "52.52",
+        "13.42",
+        "is_day,apparent_temperature,relative_humidity_2m,temperature_2m",
+        "1",
+    };
+    std::vector<std::string> paramList;
+    for(int i : {0,1,2,3}){
+        paramList.push_back(Hand.buildParam(params[i], values[i]));
+    }
+    json data = json::parse(Hand.request(paramList, 4).memory);
     printData(data);
     return 0;
 }
