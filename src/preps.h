@@ -1,11 +1,10 @@
-#ifndef INCLUDES_H_
-#define INCLUDES_H_
-
+#ifndef PREPS_H_
+#define PREPS_H_
 #include "basic.h"
 #include "crypt.h"
 #include "db.h"
 #include "connect.h"
 #include "cmd.h"
-#include "preps.h"
 
+extern CMDpage pages[];
 #endif

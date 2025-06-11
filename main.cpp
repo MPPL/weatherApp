@@ -1,186 +1,28 @@
 #include "src/includes.h"
 using json = nlohmann::json;
 
-typedef struct {char* memory; unsigned int size;} simpledata;
-typedef struct {
-    unsigned long long use_flag = 0;
-    double latitude;
-    double longitude;
-    float elevation;
-    std::vector<std::string> hourly;
-    std::vector<std::string> daily;
-    std::vector<std::string> current;
-    std::string temperature_unit = "celcius";
-    std::string wind_speed_unit = "kmh";
-    std::string precipation_unit = "mm";
-    std::string timezone = "iso8601";
-    char past_days = 0;
-    char forecast_days = 7;
-    std::string start_date;
-    std::string end_date;
-    std::vector<std::string> models = {"auto"};
-    std::string cell_selection = "land";
-} weatherSettings;
-
-class Handler{
-    public:
-    
-    bool debug = false;
-    std::string url;
-    CURL *curl_handle;
-    CURLcode urlcode;
-    simpledata data;
-
-    weatherSettings Settings;
-
-    Handler(){
-
-        data.memory = (char*)malloc(1);
-        data.size = 0;
-    }
-
-    void reset(){
-        free(data.memory);
-        data.memory = (char*)malloc(1);
-        data.size = 0;    
-    }
-
-    static size_t MemoryHandler(void* content, size_t size, size_t mem, void* user){
-        size_t SIZE = size * mem;
-        simpledata* tmp = (simpledata*) user;
-
-        char* ptr = (char*)realloc(tmp->memory, tmp->size+SIZE+1);
-        if(ptr == NULL){
-            std::cout << "OOM: Out Of Memory\n";
-            return 0;
-        }
-
-        tmp->memory = ptr;
-        memcpy(&(tmp->memory[tmp->size]), content, SIZE);
-        tmp->size += SIZE;
-        tmp->memory[tmp->size] = 0;
-
-        return SIZE;
-    }
-
-    simpledata request(std::vector<std::string> params, int paramsLen){
-        curl_handle = curl_easy_init();
-        if(!curl_handle){
-            exit(-1);
-        }
-
-        url = "https://api.open-meteo.com/v1/forecast?";
-        for(int i = 0; i < paramsLen -1; i++){
-            url = std::format("{}{}&", url, params[i]);
-        }
-        if(paramsLen){
-            url = std::format("{}{}", url, params[paramsLen-1]);
-        }
-
-        std::cout << url << "\n";
-
-        curl_easy_setopt(curl_handle, CURLOPT_URL, url.c_str());
-        curl_easy_setopt(curl_handle, CURLOPT_FOLLOWLOCATION, 1l);
-        curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, MemoryHandler);
-        curl_easy_setopt(curl_handle, CURLOPT_WRITEDATA, (void *)&data);
-        curl_easy_setopt(curl_handle, CURLOPT_USERAGENT, "libcurl-agent/1.0");
-
-        urlcode = curl_easy_perform(curl_handle);
-
-        if(urlcode != CURLE_OK){
-            std::cout << "CURL ERROR: " << curl_easy_strerror(urlcode) << "\n";
-        }
-        if(debug){
-            std::cout << "Size: " << data.size << "\n";
-            std::cout << "Data: " << (std::string)data.memory << "\n";
-        }
-
-        curl_easy_cleanup(curl_handle);
-        return data;
-    }
-
-    inline std::string buildParam(std::string name, std::string value){
-        return std::format("{}={}", name, value);
-    }
-};
-
-void printData(json data){
-    std::cout << "latitude: " << data["latitude"] << "\n";
-    std::cout << "longitude: " << data["longitude"] << "\n";
-    std::cout << "is_day: " << (bool)(int)(data["current"]["is_day"]) << "\n";
-}
-
-//#define CMD_MODE
-void cmd(Handler* h, DBManager* db){
-    int option = 0;
-    bool loop = true;
-    while(loop){
-        std::cout << "1. Log in\n2. Register\n3. Exit\n";
-        std::cin >> option;
-        switch(option){
-            case 1:{
-                std::string user;
-                std::string password;
-                std::cout << "\n\nLoging in\nusername: ";
-                std::cin >> user;
-                std::cout << "\npassword: ";
-                std::cin >> password;
-                if(db->login(user, password) != 0){
-                    std::cout << "\n\x1B[32mLogin Failed!\033[0m\n";
-                }
-                loop = false;
-                break;
-            }
-            case 2:{
-                std::string user;
-                std::string password;
-                std::cout << "\n\nRegister\nusername: ";
-                std::cin >> user;
-                std::cout << "\npassword: ";
-                std::cin >> password;
-                if(db->register_user(user, password) != 0){
-                    std::cout << "\n\x1B[32mRegister Failed!\033[0m\n";
-                }
-                loop = false;
-                break;
-            }
-            case 3:{
-                exit(0);
-                loop = false;
-                break;
-            }
-        }
-    }
-}
-
 int main(int argc, char* argv[]){
 
-    Handler Hand = Handler();
-    DBManager DB = DBManager("db/etherApp.db");
-    
-#ifdef CMD_MODE
-    cmd(&Hand, &DB);
-#endif
+    Connection Handler = Connection();
+    DBManager DB("eatherApp.db");
+    CMD cmd(1, pages, &DB, &Handler);
 
     //Hand.debug = true;
     //Hand.url = "https://api.open-meteo.com/v1/forecast?latitude=52.52&longitude=13.41&current=is_day,apparent_temperature,relative_humidity_2m,temperature_2m&forecast_days=1";
-    std::string params[] = {
-        "latitude",
-        "longitude",
-        "current",
-        "forecast_days",
-    };
-    std::string values[] = {
-        "52.52",
-        "13.42",
-        "is_day,apparent_temperature,relative_humidity_2m,temperature_2m",
-        "1",
-    };
-    std::vector<std::string> paramList;
-    for(int i : {0,1,2,3}){
-        paramList.push_back(Hand.buildParam(params[i], values[i]));
-    }
-    json data = json::parse(Hand.request(paramList, 4).memory);
-    printData(data);
+    while(cmd.Step());
     return 0;
 }
+
+/* TO DO
+
++ create keys relative to executable (crossplatform)
++ to uchieve crossplatformness, find a way to check on what system you are
++ finish options to choose (kind of done)
+- check if database works (doesn't work)
++ finish generation of open-meteo link
+- error handling for open-meteo (nah, too much)
+- cmd Menu: ListDraw() --- scrapped
+- db DBManager: put \ before all " and ' characters inside values passed to querries to db --- scrapped
+
+I still have a time to add safe sql statements, but i'll let it be, as db refuses to work
+*/

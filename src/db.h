@@ -1,18 +1,24 @@
 #ifndef DB_H_
 #define DB_H_
-#include "includes.h"
-#endif
+#include "crypt.h"
+#include "basic.h"
 
 class DBManager{
     sqlite3* db;
     std::string DBname;
-    unsigned char* key;
-    bool first_setup = false;
+    std::filesystem::path dbPath;
+    std::filesystem::path keyFolder;
+    key_iv* prvkey;
 public:
     DBManager(std::string db_name);
     int login(std::string username, std::string passwd);
     int register_user(std::string username, std::string passwd);
 private:
-    int request(std::string querry, int (callback)(void*, int, char**, char**), void* struc);
-    static int user_exists(void* vu, int argc, char** argv, char** ColName);
+    void first_key_setup();
+    void first_setup();
+    int request(std::string querry, int (*callback)(void**, int, int, int[], void*), void* struc);
+    static int emptyCallback(void** data, int row_count, int col_count, int* datatypes, void* out);
+    static int user_exists(void** data, int row_count, int col_count, int* datatypes, void* out);
 };
+
+#endif
